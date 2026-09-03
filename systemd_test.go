@@ -20,8 +20,8 @@ func TestSystemdPrefixesSlogLevels(t *testing.T) {
 		{level: slog.LevelWarn, prefix: "<4>"},
 		{level: slog.LevelError, prefix: "<3>"},
 		{level: slog.LevelInfo - 1, prefix: "<7>"},
-		{level: slog.LevelInfo + 1, prefix: "<6>"},
-		{level: slog.LevelWarn + 1, prefix: "<4>"},
+		{level: slog.LevelWarn - 1, prefix: "<6>"},
+		{level: slog.LevelError - 1, prefix: "<4>"},
 		{level: slog.LevelError + 1, prefix: "<3>"},
 	} {
 		t.Run(test.level.String(), func(t *testing.T) {
@@ -49,5 +49,30 @@ func TestSystemdPrefixesSlogLevels(t *testing.T) {
 				t.Fatalf("output contains ANSI color: %q", actual)
 			}
 		})
+	}
+}
+
+func TestSystemdKeepsRecordOnOneLine(t *testing.T) {
+	var output bytes.Buffer
+	logger := slogx.New(slogx.Options{
+		Format: slogx.Systemd,
+		Writer: &output,
+	})
+	record := slog.NewRecord(testTimestamp(0), slog.LevelInfo, "first line\nsecond line", 0)
+	record.AddAttrs(slog.String("detail", "third line\nfourth line"))
+	if err := logger.Handler().Handle(context.Background(), record); err != nil {
+		t.Fatalf("handle record: %v", err)
+	}
+
+	actual := output.String()
+	t.Logf("slogx output: %s", strings.TrimSpace(actual))
+	if strings.Count(actual, "\n") != 1 {
+		t.Fatalf("output contains more than one physical line: %q", actual)
+	}
+	if !strings.Contains(actual, `msg="first line\nsecond line"`) {
+		t.Fatalf("output = %q, want escaped message newline", actual)
+	}
+	if !strings.Contains(actual, `detail="third line\nfourth line"`) {
+		t.Fatalf("output = %q, want escaped attribute newline", actual)
 	}
 }

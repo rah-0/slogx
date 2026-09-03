@@ -31,16 +31,30 @@ func TestNewUsesTimeLayout(t *testing.T) {
 	}
 }
 
-func TestNewDefaultUsesPreferredTimeLayout(t *testing.T) {
+func TestNewPreservesNativeTimestampByDefault(t *testing.T) {
 	timestamp := testTimestamp(123456789)
 
+	var nativeOutput bytes.Buffer
+	nativeHandler := slog.NewJSONHandler(&nativeOutput, nil)
+	handleRecord(t, nativeHandler, timestamp)
+
+	actual := renderRecord(t, slogx.JSON, "", timestamp)
+	t.Logf("slogx output: %s", strings.TrimSpace(actual))
+	if actualTime, nativeTime := outputTime(t, slogx.JSON, actual), outputTime(t, slogx.JSON, nativeOutput.String()); actualTime != nativeTime {
+		t.Fatalf("time = %q, want native slog time %q", actualTime, nativeTime)
+	}
+}
+
+func TestNewDefaultUsesPreferredTimeLayout(t *testing.T) {
 	for _, test := range []struct {
 		name       string
+		timestamp  time.Time
 		timeLayout string
 		expected   string
 	}{
-		{name: "default", expected: "2026-09-03 20:45:12.123456"},
-		{name: "override", timeLayout: "2006/01/02-15:04:05", expected: "2026/09/03-20:45:12"},
+		{name: "default", timestamp: testTimestamp(123456789), expected: "2026-09-03 20:45:12.123456"},
+		{name: "zero microseconds", timestamp: testTimestamp(0), expected: "2026-09-03 20:45:12.000000"},
+		{name: "override", timestamp: testTimestamp(123456789), timeLayout: "2006/01/02-15:04:05", expected: "2026/09/03-20:45:12"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
@@ -49,13 +63,44 @@ func TestNewDefaultUsesPreferredTimeLayout(t *testing.T) {
 				TimeLayout: test.timeLayout,
 				Writer:     &output,
 			})
-			handleRecord(t, logger.Handler(), timestamp)
+			handleRecord(t, logger.Handler(), test.timestamp)
 			t.Logf("slogx output: %s", strings.TrimSpace(output.String()))
 
 			if actual := outputTime(t, slogx.JSON, output.String()); actual != test.expected {
 				t.Fatalf("time = %q, want %q", actual, test.expected)
 			}
 		})
+	}
+}
+
+func TestNewUsesStderr(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stderr pipe: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = reader.Close()
+		_ = writer.Close()
+	})
+
+	logger := func() *slog.Logger {
+		stderr := os.Stderr
+		os.Stderr = writer
+		defer func() { os.Stderr = stderr }()
+		return slogx.New(slogx.Options{})
+	}()
+
+	handleRecord(t, logger.Handler(), testTimestamp(123456789))
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close stderr pipe: %v", err)
+	}
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+	t.Logf("slogx stderr: %s", strings.TrimSpace(string(output)))
+	if len(output) == 0 {
+		t.Fatal("stderr is empty")
 	}
 }
 

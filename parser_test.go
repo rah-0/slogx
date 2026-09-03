@@ -3,8 +3,10 @@ package slogx_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,8 +25,10 @@ func TestJSONDecoderDecodesSlogxRecord(t *testing.T) {
 	record.AddAttrs(
 		slog.Int64("request_id", 9_007_199_254_740_993),
 		slog.Group("request", slog.String("method", "GET"), slog.Int("attempt", 2)),
+		slog.String(slog.TimeKey, "application time"),
 		slog.String(slog.LevelKey, "application level"),
 		slog.String(slog.MessageKey, "attribute message"),
+		slog.String(slog.SourceKey, "application source"),
 		slog.Int("attempt", 1),
 		slog.Int("attempt", 2),
 	)
@@ -49,6 +53,23 @@ func TestJSONDecoderDecodesSlogxRecord(t *testing.T) {
 	}
 	if actual.Source != nil {
 		t.Fatalf("source = %+v, want nil", actual.Source)
+	}
+	keys := make([]string, len(actual.Attributes))
+	for index, attribute := range actual.Attributes {
+		keys[index] = attribute.Key
+	}
+	expectedKeys := []string{
+		"request_id",
+		"request",
+		slog.TimeKey,
+		slog.LevelKey,
+		slog.MessageKey,
+		slog.SourceKey,
+		"attempt",
+		"attempt",
+	}
+	if !slices.Equal(keys, expectedKeys) {
+		t.Fatalf("attribute keys = %q, want %q", keys, expectedKeys)
 	}
 	if actual := string(attributeValue(t, actual.Attributes, "request_id", 0)); actual != "9007199254740993" {
 		t.Fatalf("request_id = %s", actual)
@@ -93,6 +114,18 @@ func TestJSONDecoderReadsMultipleRecords(t *testing.T) {
 	}
 	if _, err := decoder.Decode(); err != io.EOF {
 		t.Fatalf("final decode error = %v, want io.EOF", err)
+	}
+}
+
+func TestJSONDecoderReportsTruncatedFinalRecord(t *testing.T) {
+	input := strings.NewReader("{\"time\":\"2026-09-03\",\"level\":\"INFO\",\"msg\":\"complete\"}\n{\"time\":\"2026-09-03\"")
+	decoder := slogx.NewJSONDecoder(input)
+
+	if _, err := decoder.Decode(); err != nil {
+		t.Fatalf("decode complete record: %v", err)
+	}
+	if _, err := decoder.Decode(); err == nil || errors.Is(err, io.EOF) {
+		t.Fatalf("truncated record error = %v, want non-EOF error", err)
 	}
 }
 
