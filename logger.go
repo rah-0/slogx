@@ -8,8 +8,7 @@ import (
 
 // Options configures a Logger created by New or NewDefault.
 type Options struct {
-	// AddSource includes the source code position of each log call.
-	// NewDefault always enables it.
+	// AddSource includes the source code position of each log call when true.
 	AddSource bool
 	// Level reports the minimum enabled log level. If nil, LevelInfo is used.
 	// Use a *slog.LevelVar to change the minimum level dynamically.
@@ -57,10 +56,9 @@ func New(options Options) *Logger {
 	return slog.New(handler)
 }
 
-// NewDefault returns a Logger with Slogx defaults and source reporting enabled.
+// NewDefault returns a Logger with Slogx output and timestamp defaults.
 // Empty Writer and TimeLayout values use os.Stdout and the preferred timestamp layout.
 func NewDefault(options Options) *Logger {
-	options.AddSource = true
 	if options.Writer == nil {
 		options.Writer = os.Stdout
 	}

@@ -4,7 +4,7 @@
 It configures the standard slog handlers instead of replacing slog's types or logging model.
 
 - Returns genuine `*slog.Logger` values.
-- Provides practical defaults for timestamps, output, and source reporting.
+- Provides practical defaults for timestamps and output, with optional source reporting.
 - Supports text, JSON, colored text, and systemd journal output.
 - Supports runtime level changes through `slog.LevelVar`.
 - Decodes its JSON logs without losing attribute order or duplicate keys.
@@ -35,7 +35,8 @@ import (
 
 func main() {
 	slogx.SetDefault(slogx.Options{
-		Format: slogx.TextColored,
+		AddSource: true,
+		Format:    slogx.TextColored,
 	})
 
 	slog.Info("service started", "version", "1.0.0")
@@ -46,7 +47,7 @@ func main() {
 `slog.Debug`, `slog.Info`, `slog.Warn`, `slog.Error`, and the logger returned by `slog.Default()` all
 use the configured handler.
 
-The preferred defaults produce output like this, with the level name colored in a terminal:
+This configuration produces output like this, with the level name colored in a terminal:
 
 ```text
 time="2026-09-03 20:45:12.123456" level=INFO source=/path/main.go:16 msg="service started" version=1.0.0
@@ -57,7 +58,7 @@ time="2026-09-03 20:45:12.123456" level=INFO source=/path/main.go:16 msg="servic
 | Function | Purpose |
 | --- | --- |
 | `New` | Builds a logger with slog-like defaults: text output, `INFO` level, stderr, native timestamp formatting, and source reporting only when requested. |
-| `NewDefault` | Builds a logger with Slogx defaults: stdout, UTC microsecond timestamps, and source reporting enabled. |
+| `NewDefault` | Builds a logger with Slogx defaults: stdout and UTC microsecond timestamps. |
 | `SetDefault` | Builds a logger with `NewDefault` and installs it through `slog.SetDefault`. |
 
 Use an independent logger when a process needs more than one configuration:
@@ -72,7 +73,7 @@ logger.Info("request completed", "status", 200)
 
 Because `slogx.Logger` aliases `slog.Logger`, the result works anywhere a `*slog.Logger` is expected.
 Standard methods such as `With`, `Log`, and `LogAttrs` remain available without adapters. Use `New`
-when native timestamps or optional source reporting are preferred over the Slogx defaults.
+when native timestamps or stderr output are preferred over the Slogx defaults.
 
 ## Options
 
@@ -81,7 +82,7 @@ when native timestamps or optional source reporting are preferred over the Slogx
 | `Format` | Selects `Text`, `JSON`, `TextColored`, or `Systemd`. The zero value is `Text`. |
 | `Level` | Sets the minimum enabled level. The default is `INFO`; a `*slog.LevelVar` can change it at runtime. |
 | `Writer` | Receives the output. `New` defaults to stderr; `NewDefault` and `SetDefault` default to stdout. |
-| `AddSource` | Adds the calling file and line. `NewDefault` and `SetDefault` always enable it. |
+| `AddSource` | Adds the calling file and line when true. The default is false. |
 | `TimeLayout` | Formats timestamps in UTC using Go's time layout syntax. With `New`, an empty value preserves slog's native timestamp format. |
 
 `NewDefault` uses this layout when `TimeLayout` is empty:
@@ -167,8 +168,8 @@ its context to the handler unchanged.
 
 The helpers write through `slog.Default()`, so they use the logger and configuration installed by
 `SetDefault`. Standard calls such as `slog.Error` remain available, including for error-level events
-that do not carry an `error` value. Caller source is emitted only when `AddSource` is enabled. `New`
-follows `Options.AddSource`, while `NewDefault` and `SetDefault` enable it automatically.
+that do not carry an `error` value. Caller source is emitted only when `AddSource` is enabled. `New`,
+`NewDefault`, and `SetDefault` all honor `Options.AddSource`.
 
 ## JSON decoding
 
@@ -194,7 +195,8 @@ uses slog's text handler without ANSI colors and adds a journal priority prefix 
 
 ```go
 slogx.SetDefault(slogx.Options{
-	Format: slogx.Systemd,
+	AddSource: true,
+	Format:    slogx.Systemd,
 })
 
 slog.Info("service started")

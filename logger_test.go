@@ -135,38 +135,55 @@ func TestNewDefaultUsesStdout(t *testing.T) {
 	}
 }
 
-func TestNewDefaultAddsSource(t *testing.T) {
-	var output bytes.Buffer
-	logger := slogx.NewDefault(slogx.Options{
-		Format: slogx.JSON,
-		Writer: &output,
-	})
-	_, expectedFile, before, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve caller before log")
-	}
-	logger.Info("source probe")
-	_, _, after, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve caller after log")
-	}
-	t.Logf("slogx output: %s", strings.TrimSpace(output.String()))
+func TestNewDefaultHonorsAddSource(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		addSource bool
+	}{
+		{name: "disabled"},
+		{name: "enabled", addSource: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			logger := slogx.NewDefault(slogx.Options{
+				AddSource: test.addSource,
+				Format:    slogx.JSON,
+				Writer:    &output,
+			})
+			_, expectedFile, before, ok := runtime.Caller(0)
+			if !ok {
+				t.Fatal("resolve caller before log")
+			}
+			logger.Info("source probe")
+			_, _, after, ok := runtime.Caller(0)
+			if !ok {
+				t.Fatal("resolve caller after log")
+			}
+			t.Logf("slogx output: %s", strings.TrimSpace(output.String()))
 
-	record, err := slogx.NewJSONDecoder(&output).Decode()
-	if err != nil {
-		t.Fatalf("decode JSON output: %v", err)
-	}
-	if record.Source == nil {
-		t.Fatal("source is nil")
-	}
-	if record.Source.File != expectedFile {
-		t.Fatalf("source file = %q, want %q", record.Source.File, expectedFile)
-	}
-	if record.Source.Line <= before || record.Source.Line >= after {
-		t.Fatalf("source line = %d, want logger call between %d and %d", record.Source.Line, before, after)
-	}
-	if record.Source.Function == "" {
-		t.Fatal("source function is empty")
+			record, err := slogx.NewJSONDecoder(&output).Decode()
+			if err != nil {
+				t.Fatalf("decode JSON output: %v", err)
+			}
+			if !test.addSource {
+				if record.Source != nil {
+					t.Fatalf("source = %+v, want nil", record.Source)
+				}
+				return
+			}
+			if record.Source == nil {
+				t.Fatal("source is nil")
+			}
+			if record.Source.File != expectedFile {
+				t.Fatalf("source file = %q, want %q", record.Source.File, expectedFile)
+			}
+			if record.Source.Line <= before || record.Source.Line >= after {
+				t.Fatalf("source line = %d, want logger call between %d and %d", record.Source.Line, before, after)
+			}
+			if record.Source.Function == "" {
+				t.Fatal("source function is empty")
+			}
+		})
 	}
 }
 
@@ -205,15 +222,7 @@ func TestSetDefaultConfiguresSlogGlobal(t *testing.T) {
 		Writer: &output,
 	})
 
-	_, expectedFile, before, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve caller before log")
-	}
 	slog.Info("global probe")
-	_, _, after, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve caller after log")
-	}
 	t.Logf("slogx global output: %s", strings.TrimSpace(output.String()))
 
 	record, err := slogx.NewJSONDecoder(&output).Decode()
@@ -223,14 +232,8 @@ func TestSetDefaultConfiguresSlogGlobal(t *testing.T) {
 	if record.Message != "global probe" {
 		t.Fatalf("message = %q, want global probe", record.Message)
 	}
-	if record.Source == nil {
-		t.Fatal("source is nil")
-	}
-	if record.Source.File != expectedFile {
-		t.Fatalf("source file = %q, want %q", record.Source.File, expectedFile)
-	}
-	if record.Source.Line <= before || record.Source.Line >= after {
-		t.Fatalf("source line = %d, want slog call between %d and %d", record.Source.Line, before, after)
+	if record.Source != nil {
+		t.Fatalf("source = %+v, want nil", record.Source)
 	}
 }
 
