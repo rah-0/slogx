@@ -144,6 +144,32 @@ level.Set(slog.LevelDebug)
 slog.Debug("debug logging enabled")
 ```
 
+## Error logging
+
+Use these helpers when a log event carries an `error`:
+
+```go
+func Error(msg string, err error, args ...any)
+func ErrorCtx(ctx context.Context, msg string, err error, args ...any)
+```
+
+For example:
+
+```go
+slogx.Error("request failed", err, "status_code", 503)
+slogx.ErrorCtx(ctx, "request failed", err, "status_code", 503)
+```
+
+`msg` remains the log record's message, while `err` is added as the structured `"err"` attribute.
+Any additional arguments are added with slog's native structured-attribute semantics. A nil error is
+logged as a structured nil value; the helpers do not silently discard the event. `ErrorCtx` passes
+its context to the handler unchanged.
+
+The helpers write through `slog.Default()`, so they use the logger and configuration installed by
+`SetDefault`. Standard calls such as `slog.Error` remain available, including for error-level events
+that do not carry an `error` value. Caller source is emitted only when `AddSource` is enabled. `New`
+follows `Options.AddSource`, while `NewDefault` and `SetDefault` enable it automatically.
+
 ## JSON decoding
 
 `NewJSONDecoder` reads the newline-delimited records produced by the `JSON` format:
