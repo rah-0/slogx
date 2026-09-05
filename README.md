@@ -20,6 +20,10 @@ Go 1.27 or later.
 go get github.com/rah-0/slogx
 ```
 
+For collecting JSON logs, see the separate
+[`slogx-collector` repository](https://github.com/rah-0/slogx-collector). Its executable reads
+from a pipe and delivers logs through a disk journal and pluggable destinations.
+
 ## Quick start
 
 Configure slog once through Slogx, then continue using the standard `log/slog` package:
@@ -236,6 +240,10 @@ journalctl --unit=my-service.service --priority=warning
 Priority filtering is inclusive, so `warning` returns both `WARN` and `ERROR` records. The text
 handler escapes embedded newlines, keeping each log event on one physical journal line. Use this
 format only for journal-connected streams; otherwise the `<N>` prefix remains visible.
+
+## Tests
+
+Run `go test -race ./...` from the repository root.
 
 ## License
 
