@@ -3,10 +3,12 @@ package slogx_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -118,16 +120,32 @@ func TestJSONDecoderReadsMultipleRecords(t *testing.T) {
 }
 
 func TestJSONDecoderReportsTruncatedFinalRecord(t *testing.T) {
-	input := strings.NewReader("{\"time\":\"2026-09-03\",\"level\":\"INFO\",\"msg\":\"complete\"}\n{\"time\":\"2026-09-03\"")
-	decoder := slogx.NewJSONDecoder(input)
-
-	if _, err := decoder.Decode(); err != nil {
-		t.Fatalf("decode complete record: %v", err)
-	}
-	if _, err := decoder.Decode(); err == nil || errors.Is(err, io.EOF) {
-		t.Fatalf("truncated record error = %v, want non-EOF error", err)
+	const complete = `{"time":"2026-09-03","level":"INFO","msg":"complete"}`
+	const next = `{"time":"2026-09-03","msg":"escaped \"value\"","nested":[1,true,null,{"key":"value"}]}`
+	for end := 1; end < len(next); end++ {
+		t.Run(strconv.Itoa(end), func(t *testing.T) {
+			decoder := slogx.NewJSONDecoder(strings.NewReader(complete + "\n" + next[:end]))
+			if _, err := decoder.Decode(); err != nil {
+				t.Fatalf("decode complete record: %v", err)
+			}
+			if _, err := decoder.Decode(); err == nil || errors.Is(err, io.EOF) {
+				t.Fatalf("truncated record %q error = %v, want non-EOF error", next[:end], err)
+			}
+		})
 	}
 }
+
+func TestJSONDecoderPreservesReaderFailure(t *testing.T) {
+	failure := errors.New("reader failed")
+	decoder := slogx.NewJSONDecoder(io.MultiReader(strings.NewReader(`{"msg":`), failingJSONReader{failure}))
+	if _, err := decoder.Decode(); !errors.Is(err, failure) {
+		t.Fatalf("decode error = %v, want original reader failure", err)
+	}
+}
+
+type failingJSONReader struct{ err error }
+
+func (reader failingJSONReader) Read([]byte) (int, error) { return 0, reader.err }
 
 func TestJSONDecoderReportsMalformedRecord(t *testing.T) {
 	decoder := slogx.NewJSONDecoder(strings.NewReader("not JSON\n"))
@@ -137,9 +155,32 @@ func TestJSONDecoderReportsMalformedRecord(t *testing.T) {
 }
 
 func TestJSONDecoderRejectsNonObject(t *testing.T) {
-	decoder := slogx.NewJSONDecoder(strings.NewReader("null\n"))
-	if _, err := decoder.Decode(); err == nil {
-		t.Fatal("decode non-object record returned nil error")
+	for _, input := range []string{"null", "[]", `"text"`, "42", "true"} {
+		t.Run(input, func(t *testing.T) {
+			decoder := slogx.NewJSONDecoder(strings.NewReader(input))
+			if _, err := decoder.Decode(); !errors.Is(err, slogx.ErrJSONRecordNotObject) {
+				t.Fatalf("decode non-object record = %v, want ErrJSONRecordNotObject", err)
+			}
+		})
+	}
+}
+
+func TestJSONDecoderFieldErrorPreservesCause(t *testing.T) {
+	for _, field := range []string{slog.TimeKey, slog.MessageKey, slog.SourceKey} {
+		t.Run(field, func(t *testing.T) {
+			decoder := slogx.NewJSONDecoder(strings.NewReader(`{"` + field + `":42}`))
+			_, err := decoder.Decode()
+			if !errors.Is(err, slogx.ErrJSONFieldDecode) {
+				t.Fatalf("decode field = %v, want ErrJSONFieldDecode", err)
+			}
+			var cause *json.UnmarshalTypeError
+			if !errors.As(err, &cause) {
+				t.Fatalf("decode field = %v, want wrapped json.UnmarshalTypeError", err)
+			}
+			if !strings.Contains(err.Error(), strconv.Quote(field)) {
+				t.Fatalf("decode error omits field %q: %v", field, err)
+			}
+		})
 	}
 }
 

@@ -82,7 +82,7 @@ func TestErrorLogsNilError(t *testing.T) {
 		log  func()
 	}{
 		{name: "Error", log: func() { slogx.Error("ignored", nil, "key", "value") }},
-		{name: "ErrorCtx", log: func() { slogx.ErrorCtx(context.Background(), "ignored", nil, "key", "value") }},
+		{name: "ErrorContext", log: func() { slogx.ErrorContext(context.Background(), "ignored", nil, "key", "value") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
@@ -117,13 +117,13 @@ func TestErrorUsesBackgroundContext(t *testing.T) {
 	}
 }
 
-func TestErrorCtxPropagatesContext(t *testing.T) {
+func TestErrorContextPropagatesContext(t *testing.T) {
 	handler := new(captureHandler)
 	setTestDefault(t, slog.New(handler))
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	slogx.ErrorCtx(ctx, "request failed", errors.New("connection refused"))
+	slogx.ErrorContext(ctx, "request failed", errors.New("connection refused"))
 
 	if handler.enabledContext != ctx {
 		t.Fatal("Enabled did not receive the supplied context")
@@ -133,17 +133,17 @@ func TestErrorCtxPropagatesContext(t *testing.T) {
 	}
 }
 
-func TestErrorCtxPassesNilContextThrough(t *testing.T) {
+func TestErrorContextNilUsesBackground(t *testing.T) {
 	handler := new(captureHandler)
 	setTestDefault(t, slog.New(handler))
 
-	slogx.ErrorCtx(nil, "request failed", errors.New("connection refused"))
+	slogx.ErrorContext(nil, "request failed", errors.New("connection refused"))
 
-	if handler.enabledContext != nil {
-		t.Fatal("Enabled context was replaced")
+	if handler.enabledContext != context.Background() {
+		t.Fatal("Enabled did not receive a background context")
 	}
-	if handler.handledContext != nil {
-		t.Fatal("Handle context was replaced")
+	if handler.handledContext != context.Background() {
+		t.Fatal("Handle did not receive a background context")
 	}
 }
 
@@ -153,7 +153,7 @@ func TestErrorHonorsDisabledLevel(t *testing.T) {
 		log  func()
 	}{
 		{name: "Error", log: func() { slogx.Error("hidden", errors.New("failure")) }},
-		{name: "ErrorCtx", log: func() { slogx.ErrorCtx(context.Background(), "hidden", errors.New("failure")) }},
+		{name: "ErrorContext", log: func() { slogx.ErrorContext(context.Background(), "hidden", errors.New("failure")) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
@@ -182,11 +182,11 @@ func TestErrorReportsCallerSource(t *testing.T) {
 		assertErrorSource(t, handler.handledRecord.Source(), expected)
 	})
 
-	t.Run("ErrorCtx", func(t *testing.T) {
+	t.Run("ErrorContext", func(t *testing.T) {
 		handler := new(captureHandler)
 		setTestDefault(t, slog.New(handler))
 
-		slogx.ErrorCtx(context.Background(), "source probe", errors.New("failure"))
+		slogx.ErrorContext(context.Background(), "source probe", errors.New("failure"))
 		expected := sourceImmediatelyBefore(t)
 
 		assertErrorSource(t, handler.handledRecord.Source(), expected)
@@ -210,8 +210,8 @@ func TestErrorHonorsAddSource(t *testing.T) {
 					slogx.Error("source probe", errors.New("failure"))
 					return sourceImmediatelyBefore(t)
 				}},
-				{name: "ErrorCtx", log: func(t *testing.T) slog.Source {
-					slogx.ErrorCtx(context.Background(), "source probe", errors.New("failure"))
+				{name: "ErrorContext", log: func(t *testing.T) slog.Source {
+					slogx.ErrorContext(context.Background(), "source probe", errors.New("failure"))
 					return sourceImmediatelyBefore(t)
 				}},
 			} {

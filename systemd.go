@@ -5,6 +5,13 @@ import (
 	"log/slog"
 )
 
+const (
+	systemdDebug   = "<7>"
+	systemdInfo    = "<6>"
+	systemdWarning = "<4>"
+	systemdError   = "<3>"
+)
+
 type systemdLevelWriter struct {
 	writer io.Writer
 }

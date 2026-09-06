@@ -13,8 +13,8 @@ var (
 )
 
 // JSON record errors returned by [JSONDecoder.Decode]. Standard-library and
-// reader errors retain their identity and can also be inspected with errors.Is
-// or errors.As.
+// reader errors retain their identity, except that EOF inside an object becomes
+// io.ErrUnexpectedEOF. Use errors.Is or errors.As to inspect them.
 var (
 	ErrJSONRecordNotObject  = errors.New("slogx: JSON record must be an object")
 	ErrInvalidJSONFieldName = errors.New("slogx: JSON record field name must be a string")

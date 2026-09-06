@@ -2,6 +2,14 @@ package slogx
 
 import "io"
 
+const (
+	ansiReset  = "\x1b[0m"
+	ansiGray   = "\x1b[90m"
+	ansiGreen  = "\x1b[32m"
+	ansiYellow = "\x1b[33m"
+	ansiRed    = "\x1b[31m"
+)
+
 type levelColorWriter struct {
 	writer io.Writer
 }

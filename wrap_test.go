@@ -2,6 +2,7 @@ package slogx_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,3 +147,69 @@ type itemError struct {
 }
 
 func (*itemError) Error() string { return "item unavailable" }
+
+func ExampleWrap() {
+	queryItem := func() error {
+		return slogx.Wrap(errors.New("connection refused"), "query item",
+			"item_id", 42, "attempt", 2)
+	}
+	loadItem := func() error {
+		if err := queryItem(); err != nil {
+			return slogx.Wrap(err, "load item", "cache_hit", false)
+		}
+		return nil
+	}
+	handleRequest := func() error {
+		if err := loadItem(); err != nil {
+			return slogx.Wrap(err, "handle request", "method", "GET", "path", "/items/42")
+		}
+		return nil
+	}
+
+	var output bytes.Buffer
+	logger := slogx.New(slogx.Options{Format: slogx.JSON, Writer: &output})
+	ctx := slogx.WithAttrs(context.Background(), slog.String("request_id", "req-123"))
+	if err := handleRequest(); err != nil {
+		logger.ErrorContext(ctx, "request failed", "err", err)
+	}
+
+	var record struct {
+		RequestID string          `json:"request_id"`
+		Err       json.RawMessage `json:"err"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		fmt.Println("decode log record:", err)
+		return
+	}
+	formatted, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		fmt.Println("format log record:", err)
+		return
+	}
+	fmt.Println(string(formatted))
+	// Output:
+	// {
+	//   "request_id": "req-123",
+	//   "err": {
+	//     "msg": "handle request",
+	//     "attrs": {
+	//       "method": "GET",
+	//       "path": "/items/42"
+	//     },
+	//     "cause": {
+	//       "msg": "load item",
+	//       "attrs": {
+	//         "cache_hit": false
+	//       },
+	//       "cause": {
+	//         "msg": "query item",
+	//         "attrs": {
+	//           "item_id": 42,
+	//           "attempt": 2
+	//         },
+	//         "cause": "connection refused"
+	//       }
+	//     }
+	//   }
+	// }
+}
