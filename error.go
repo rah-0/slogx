@@ -9,12 +9,16 @@ import (
 
 // Error logs msg at [slog.LevelError] with err as a structured "err" attribute.
 // Additional arguments are handled as in [slog.Logger.Error].
+// Errors returned by [Wrap] expose their per-layer attributes to native handlers.
 func Error(msg string, err error, args ...any) {
 	logError(context.Background(), msg, err, args...)
 }
 
-// ErrorCtx is like [Error] but uses ctx.
-func ErrorCtx(ctx context.Context, msg string, err error, args ...any) {
+// ErrorContext is like [Error] but uses ctx. A nil ctx uses [context.Background].
+func ErrorContext(ctx context.Context, msg string, err error, args ...any) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	logError(ctx, msg, err, args...)
 }
 
