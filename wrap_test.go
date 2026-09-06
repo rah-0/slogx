@@ -47,6 +47,50 @@ func TestWrapNilAndEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestWithNil(t *testing.T) {
+	if err := slogx.With(nil, "attempt", 2); err != nil {
+		t.Fatalf("With(nil) = %v, want nil", err)
+	}
+}
+
+func TestWithPreservesErrorChain(t *testing.T) {
+	cause := &itemError{id: 42}
+	err := slogx.With(cause, "attempt", 2)
+	if got := err.Error(); got != cause.Error() {
+		t.Fatalf("Error() = %q, want %q", got, cause.Error())
+	}
+	if errors.Unwrap(err) != cause {
+		t.Fatal("Unwrap did not preserve the immediate cause")
+	}
+	if !errors.Is(err, cause) {
+		t.Fatal("errors.Is did not find the underlying cause")
+	}
+	var matched *itemError
+	if !errors.As(err, &matched) || matched != cause {
+		t.Fatal("errors.As did not recover the original typed error")
+	}
+}
+
+func TestWithJSONPreservesEveryLayer(t *testing.T) {
+	inner := slogx.Wrap(&itemError{id: 42}, "query item", "attempt", 2)
+	err := slogx.With(inner, "item_id", 42, slog.Group("cache", "hit", false))
+	if got := err.Error(); got != inner.Error() {
+		t.Fatalf("Error() = %q, want %q", got, inner.Error())
+	}
+
+	var output bytes.Buffer
+	slog.New(slog.NewJSONHandler(&output, nil)).Error("failed", "err", err)
+	record, decodeErr := slogx.NewJSONDecoder(&output).Decode()
+	if decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	const want = `{"msg":"","attrs":{"item_id":42,"cache":{"hit":false}},` +
+		`"cause":{"msg":"query item","attrs":{"attempt":2},"cause":"item unavailable"}}`
+	if got := string(errorAttributeValue(t, record.Attributes, "err")); got != want {
+		t.Fatalf("err = %s, want %s", got, want)
+	}
+}
+
 func TestWrapJSONPreservesEveryLayer(t *testing.T) {
 	cause := errors.New("connection refused")
 	err := slogx.Wrap(cause, "query item",

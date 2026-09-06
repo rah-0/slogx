@@ -21,6 +21,12 @@ func Wrap(err error, msg string, args ...any) error {
 	}
 }
 
+// With adds structured attributes to err without changing its error text.
+// It is equivalent to Wrap(err, "", args...) and returns nil when err is nil.
+func With(err error, args ...any) error {
+	return Wrap(err, "", args...)
+}
+
 type wrappedError struct {
 	cause error
 	msg   string

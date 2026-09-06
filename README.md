@@ -75,9 +75,10 @@ color, systemd, and callback details.
 
 ## Structured errors, context, and spans
 
-- [`Wrap`](examples/errors) retains a message and attributes at each error layer,
-  preserving `errors.Is` and `errors.As`. `Error` and `ErrorContext` log the error
-  under the structured `err` attribute.
+- [`Wrap`](examples/errors) retains a message and attributes at each error layer;
+  `With` adds attributes without changing the error text. Both preserve `errors.Is`
+  and `errors.As`. `Error` and `ErrorContext` log the error under the structured
+  `err` attribute.
 - [`WithAttrs`](examples/context) explicitly attaches metadata to context-aware
   log calls. Other context values and local variables are not collected automatically.
 - [`StartSpan`](examples/tracing) creates an operation and a context for correlated
